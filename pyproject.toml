@@ -164,6 +164,7 @@ good-names = [
 # consider-using-namedtuple-or-dataclass - too opinionated
 # consider-using-assignment-expr - decision to use := better left to devs
 disable = [
+    "fixme",
     "format",
     "abstract-method",
     "cyclic-import",
