@@ -15,6 +15,7 @@ from homeassistant.helpers.selector import (
     TextSelector,
     TextSelectorConfig,
     TextSelectorType,
+    selector,
 )
 
 from .const import DOMAIN
@@ -26,7 +27,16 @@ TYPE_IP_GATEWAY = "ip_gateway"
 TYPE_RS_485_ADAPTER = "rs_485"
 
 STEP_USER_SCHEMA = vol.Schema(
-    {vol.Optional(CONF_GATEWAY_TYPE): vol.In([TYPE_IP_GATEWAY, TYPE_RS_485_ADAPTER])}
+    {
+        vol.Required(CONF_GATEWAY_TYPE): selector(
+            {
+                "select": {
+                    "options": [TYPE_IP_GATEWAY, TYPE_RS_485_ADAPTER],
+                    "translation_key": CONF_GATEWAY_TYPE,
+                }
+            }
+        )
+    }
 )
 STEP_IP_GATEWAY_SCHEMA = vol.Schema(
     {
