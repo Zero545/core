@@ -1,11 +1,21 @@
 {
   "config": {
+    "flow_title": "{host}",
     "step": {
       "user": {
+        "description": "Choose Haus-Bus connection type",
         "data": {
-          "host": "[%key:common::config_flow::data::host%]",
-          "username": "[%key:common::config_flow::data::username%]",
-          "password": "[%key:common::config_flow::data::password%]"
+          "gateway_type": "[%key:common::config_flow::data::device%]"
+        }
+      },
+      "ip_gateway": {
+        "data": {
+          "ip_address": "[%key:common::config_flow::data::ip%]"
+        }
+      },
+      "rs_485_adapter": {
+        "data": {
+          "device_path": "[%key:common::config_flow::data::usb_path%]"
         }
       }
     },
@@ -16,6 +26,14 @@
     },
     "abort": {
       "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+    }
+  },
+  "selector": {
+    "gateway_type": {
+      "options": {
+        "ip_gateway": "LAN Gateway",
+        "rs_485": "RS-485 USB adapter"
+      }
     }
   }
 }

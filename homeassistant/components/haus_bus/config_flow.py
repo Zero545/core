@@ -7,6 +7,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.const import CONF_IP_ADDRESS
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
@@ -21,15 +22,17 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 CONF_GATEWAY_TYPE = "gateway_type"
-TYPE_IP_GATEWAY = "ip-gateway"
-TYPE_RS_485_ADAPTER = "RS-485"
+TYPE_IP_GATEWAY = "ip_gateway"
+TYPE_RS_485_ADAPTER = "rs_485"
 
 STEP_USER_SCHEMA = vol.Schema(
     {vol.Optional(CONF_GATEWAY_TYPE): vol.In([TYPE_IP_GATEWAY, TYPE_RS_485_ADAPTER])}
 )
 STEP_IP_GATEWAY_SCHEMA = vol.Schema(
     {
-        vol.Required("ip", description={"suggested_value": "127.0.0.1"}): TextSelector(
+        vol.Required(
+            CONF_IP_ADDRESS, description={"suggested_value": "127.0.0.1"}
+        ): TextSelector(
             TextSelectorConfig(type=TextSelectorType.URL, autocomplete="url")
         )
     }
