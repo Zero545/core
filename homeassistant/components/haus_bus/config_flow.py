@@ -25,6 +25,7 @@ _LOGGER = logging.getLogger(__name__)
 CONF_GATEWAY_TYPE = "gateway_type"
 TYPE_IP_GATEWAY = "ip_gateway"
 TYPE_RS_485_ADAPTER = "rs_485"
+CONF_DEVICE_PATH = "device_path"
 
 STEP_USER_SCHEMA = vol.Schema(
     {
@@ -48,7 +49,11 @@ STEP_IP_GATEWAY_SCHEMA = vol.Schema(
     }
 )
 STEP_USB_RS485_SCHEMA = vol.Schema(
-    {vol.Required("device_path", description={"suggested_value": "/dev/ttyUSB0"}): str}
+    {
+        vol.Required(
+            CONF_DEVICE_PATH, description={"suggested_value": "/dev/ttyUSB0"}
+        ): str
+    }
 )
 
 
@@ -86,11 +91,11 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     hub = HausBusHub(data[CONF_GATEWAY_TYPE])
 
     if hub.host_type == TYPE_IP_GATEWAY:
-        if not await hub.authenticate_ip_gateway(data["ip"]):
+        if not await hub.authenticate_ip_gateway(data[CONF_IP_ADDRESS]):
             raise InvalidAuth
 
     if hub.host_type == TYPE_RS_485_ADAPTER:
-        if not await hub.authenticate_usb_rs485(data["device_path"]):
+        if not await hub.authenticate_usb_rs485(data[CONF_DEVICE_PATH]):
             raise InvalidAuth
 
     # If you cannot connect:
@@ -140,7 +145,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
-                return self.async_create_entry(title="haus_bus_id", data=user_input)
+                return self.async_create_entry(title="Haus-Bus", data=user_input)
 
         return self.async_show_form(
             step_id="ip_gateway", data_schema=STEP_IP_GATEWAY_SCHEMA, errors=errors
@@ -163,7 +168,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "unknown"
             else:
-                return self.async_create_entry(title="haus_bus_id", data=user_input)
+                return self.async_create_entry(title="Haus-Bus", data=user_input)
 
         return self.async_show_form(
             step_id="rs_485_adapter", data_schema=STEP_USB_RS485_SCHEMA, errors=errors
