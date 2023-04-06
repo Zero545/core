@@ -3,6 +3,7 @@ from typing import Any, cast
 
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
+    ATTR_RGB_COLOR,
     DOMAIN,
     ColorMode,
     LightEntity,
@@ -13,6 +14,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN as HAUSBUSDOMAIN
+from .device import HausbusChannel, HausbusDevice
 from .gateway import HausbusGateway
 
 
@@ -21,75 +23,99 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the deCONZ lights and groups from a config entry."""
+    """Set up the Haus-Bus lights from a config entry."""
     gateway = cast(HausbusGateway, hass.data[HAUSBUSDOMAIN][config_entry.entry_id])
 
     er.async_get(hass)
 
     # search for light entities in discovered devices
 
-    light_device = HausbusDevice()
+    light_device = HausbusDevice(gateway)
 
-    async_add_entities([HausbusLight(light_device, gateway)])
+    light_device.channels.append(HausbusLight("dim", 1, light_device, gateway))
+    light_device.channels.append(HausbusLight("dim", 2, light_device, gateway))
+    light_device.channels.append(HausbusLight("dim", 3, light_device, gateway))
+    light_device.channels.append(HausbusLight("dim", 4, light_device, gateway))
+    light_device.channels.append(HausbusLight("dim", 5, light_device, gateway))
+    light_device.channels.append(HausbusLight("dim", 6, light_device, gateway))
+    light_device.channels.append(HausbusLight("rgb", 1, light_device, gateway))
+    light_device.channels.append(HausbusLight("rgb", 2, light_device, gateway))
 
-
-class HausbusDevice:
-    """Test device implementation."""
-
-    name = "Dimmer"
-    id = 123456
-    channels = ["dim1", "dim2"]
-    brightness = 0
-    state = False
-
-    def turn_on(self) -> None:
-        """Turn on action."""
-        self.state = True
-
-    def turn_off(self) -> None:
-        """Turn off action."""
-        self.state = False
+    async_add_entities(light_device.channels)
 
 
-class HausbusLight(LightEntity):
+class HausbusLight(HausbusChannel, LightEntity):
     """Representation of a Haus-Bus light."""
 
     TYPE = DOMAIN
 
-    def __init__(self, device: HausbusDevice, gateway: HausbusGateway) -> None:
+    def __init__(
+        self,
+        channel_type: str,
+        instance_id: int,
+        device: HausbusDevice,
+        gateway: HausbusGateway,
+    ) -> None:
         """Set up light."""
-        super().__init__()
+        super().__init__(channel_type, instance_id, device, gateway)
 
-        self._device = device
-        self.gateway = gateway
+        self._state = 0
+        self._brightness = 255
+        self._rgb = (255, 255, 255)
+
+        self._attr_supported_color_modes: set[ColorMode] = set()
+        if self._type == "dim":
+            self._attr_supported_color_modes.add(ColorMode.BRIGHTNESS)
+        elif self._type == "rgb":
+            self._attr_supported_color_modes.add(ColorMode.RGB)
 
     @property
     def color_mode(self) -> str | None:
         """Return the color mode of the light."""
-        if self._device.brightness is not None:
+        if self._type == "dim":
             color_mode = ColorMode.BRIGHTNESS
+        elif self._type == "rgb":
+            color_mode = ColorMode.RGB
         else:
             color_mode = ColorMode.ONOFF
         return color_mode
 
     @property
+    def rgb_color(self) -> tuple[int, int, int] | None:
+        """Return the brightness of this light between 0..255."""
+        return self._rgb
+
+    @property
     def brightness(self) -> int | None:
         """Return the brightness of this light between 0..255."""
-        return self._device.brightness
+        return self._brightness
 
     @property
     def is_on(self) -> bool | None:
         """Return true if light is on."""
-        return self._device.state
+        return self._state == 1
+
+    def turn_on(self, **kwargs: Any) -> None:
+        """Turn on action."""
+        self._state = 1
+
+    def turn_off(self, **kwargs: Any) -> None:
+        """Turn off action."""
+        self._state = 0
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on light."""
-        self._device.brightness = kwargs.get(ATTR_BRIGHTNESS, 255)
-        self._device.turn_on()
+        if ATTR_BRIGHTNESS in kwargs:
+            self._brightness = kwargs[ATTR_BRIGHTNESS]
+
+        if ATTR_RGB_COLOR in kwargs:
+            self._rgb = kwargs[ATTR_RGB_COLOR]
+
+        self.turn_on()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off light."""
-        self._device.turn_off()
+        self.turn_off()
 
     @callback
     def async_update_callback(self) -> None:

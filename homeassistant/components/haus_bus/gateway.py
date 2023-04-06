@@ -10,3 +10,4 @@ class HausbusGateway:
         """Initialize the system."""
         self.hass = hass
         self.config_entry = config_entry
+        self.bridge_id = "1"

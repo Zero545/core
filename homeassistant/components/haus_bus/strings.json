@@ -35,5 +35,34 @@
         "rs_485": "RS-485 USB adapter"
       }
     }
+  },
+  "entity": {
+    "light": {
+      "dim": {
+        "name": "Dimmer"
+      },
+      "led": {
+        "name": "LED"
+      },
+      "rgb": {
+        "name": "RGB Dimmer"
+      },
+      "lbn": {
+        "name": "Backlight"
+      }
+    },
+    "switch": {
+      "out": {
+        "name": "[%key:component::switch::entity_component::switch::name%]"
+      },
+      "redled": {
+        "name": "Red module LED"
+      }
+    },
+    "binary_sensor": {
+      "btn": {
+        "name": "[%key:component::binary_sensor::entity_component::_::name%]"
+      }
+    }
   }
 }
