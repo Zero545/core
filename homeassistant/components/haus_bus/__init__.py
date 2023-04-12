@@ -1,14 +1,15 @@
 """The hausbus integration."""
 from __future__ import annotations
 
+import voluptuous as vol
+
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.const import ATTR_DEVICE_ID, Platform
+from homeassistant.core import HomeAssistant, callback
 
 from .binary_sensor import HausbusBinarySensor
 from .const import DOMAIN
-from .device import HausbusDevice
-from .gateway import HausbusGateway
+from .gateway import HausbusChannel, HausbusDevice, HausbusGateway
 from .light import HausbusLight
 from .switch import HausbusSwitch
 
@@ -32,27 +33,39 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # double RGB dimmer dummy device
     device = HausbusDevice(gateway.bridge_id)
 
-    device.channels.append(HausbusLight("dim", 1, device))
-    device.channels.append(HausbusLight("dim", 2, device))
-    device.channels.append(HausbusLight("dim", 3, device))
-    device.channels.append(HausbusLight("dim", 4, device))
-    device.channels.append(HausbusLight("dim", 5, device))
-    device.channels.append(HausbusLight("dim", 6, device))
-    device.channels.append(HausbusLight("rgb", 1, device))
-    device.channels.append(HausbusLight("rgb", 2, device))
+    device.channels.append(HausbusLight("dim", 1, device, gateway))
+    device.channels.append(HausbusLight("dim", 2, device, gateway))
+    device.channels.append(HausbusLight("dim", 3, device, gateway))
+    device.channels.append(HausbusLight("dim", 4, device, gateway))
+    device.channels.append(HausbusLight("dim", 5, device, gateway))
+    device.channels.append(HausbusLight("dim", 6, device, gateway))
+    device.channels.append(HausbusLight("rgb", 1, device, gateway))
+    device.channels.append(HausbusLight("rgb", 2, device, gateway))
 
-    device.channels.append(HausbusBinarySensor("btn", 17, device))
-    device.channels.append(HausbusBinarySensor("btn", 18, device))
-    device.channels.append(HausbusBinarySensor("btn", 19, device))
-    device.channels.append(HausbusBinarySensor("btn", 20, device))
-    device.channels.append(HausbusBinarySensor("btn", 21, device))
-    device.channels.append(HausbusBinarySensor("btn", 22, device))
+    device.channels.append(HausbusBinarySensor("btn", 17, device, gateway))
+    device.channels.append(HausbusBinarySensor("btn", 18, device, gateway))
+    device.channels.append(HausbusBinarySensor("btn", 19, device, gateway))
+    device.channels.append(HausbusBinarySensor("btn", 20, device, gateway))
+    device.channels.append(HausbusBinarySensor("btn", 21, device, gateway))
+    device.channels.append(HausbusChannel("tst", 22, device, gateway))
 
-    device.channels.append(HausbusSwitch("out", 210, device))
+    device.channels.append(HausbusSwitch("out", 210, device, gateway))
 
     gateway.devices.append(device)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # add device services: needs a services.yaml. Can be moved to separate services.py (see deconz integration)
+    @callback
+    def handle_reset(call):
+        """Handle the service call."""
+        device = call.data.get(ATTR_DEVICE_ID, None)
+
+        hass.states.set(f"{DOMAIN}.reset", device)
+
+    hass.services.async_register(
+        DOMAIN, "reset", handle_reset, vol.Schema({vol.Required(ATTR_DEVICE_ID): str})
+    )
 
     return True
 

@@ -8,8 +8,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN as HAUSBUSDOMAIN
-from .device import HausbusChannel, HausbusDevice
-from .gateway import HausbusGateway
+from .gateway import HausbusChannel, HausbusDevice, HausbusGateway
 
 
 async def async_setup_entry(
@@ -38,10 +37,14 @@ class HausbusSwitch(HausbusChannel, SwitchEntity):
     TYPE = DOMAIN
 
     def __init__(
-        self, channel_type: str, instance_id: int, device: HausbusDevice
+        self,
+        channel_type: str,
+        instance_id: int,
+        device: HausbusDevice,
+        gateway: HausbusGateway,
     ) -> None:
         """Set up light."""
-        super().__init__(channel_type, instance_id, device)
+        super().__init__(channel_type, instance_id, device, gateway)
 
         self._state = False
 
