@@ -29,19 +29,13 @@ async def async_setup_entry(
     er.async_get(hass)
 
     # search for light entities in discovered devices
+    entities: list[HausbusLight] = []
+    for device in gateway.devices:
+        for channel in device.channels:
+            if isinstance(channel, HausbusLight):
+                entities.append(channel)
 
-    light_device = HausbusDevice(gateway)
-
-    light_device.channels.append(HausbusLight("dim", 1, light_device, gateway))
-    light_device.channels.append(HausbusLight("dim", 2, light_device, gateway))
-    light_device.channels.append(HausbusLight("dim", 3, light_device, gateway))
-    light_device.channels.append(HausbusLight("dim", 4, light_device, gateway))
-    light_device.channels.append(HausbusLight("dim", 5, light_device, gateway))
-    light_device.channels.append(HausbusLight("dim", 6, light_device, gateway))
-    light_device.channels.append(HausbusLight("rgb", 1, light_device, gateway))
-    light_device.channels.append(HausbusLight("rgb", 2, light_device, gateway))
-
-    async_add_entities(light_device.channels)
+    async_add_entities(entities)
 
 
 class HausbusLight(HausbusChannel, LightEntity):
@@ -50,14 +44,10 @@ class HausbusLight(HausbusChannel, LightEntity):
     TYPE = DOMAIN
 
     def __init__(
-        self,
-        channel_type: str,
-        instance_id: int,
-        device: HausbusDevice,
-        gateway: HausbusGateway,
+        self, channel_type: str, instance_id: int, device: HausbusDevice
     ) -> None:
         """Set up light."""
-        super().__init__(channel_type, instance_id, device, gateway)
+        super().__init__(channel_type, instance_id, device)
 
         self._state = 0
         self._brightness = 255

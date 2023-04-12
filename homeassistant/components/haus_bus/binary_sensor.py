@@ -23,29 +23,13 @@ async def async_setup_entry(
     er.async_get(hass)
 
     # search for binary sensor entities in discovered devices
+    entities: list[HausbusBinarySensor] = []
+    for device in gateway.devices:
+        for channel in device.channels:
+            if isinstance(channel, HausbusBinarySensor):
+                entities.append(channel)
 
-    binary_sensor_device = HausbusDevice(gateway)
-
-    binary_sensor_device.channels.append(
-        HausbusBinarySensor("btn", 17, binary_sensor_device, gateway)
-    )
-    binary_sensor_device.channels.append(
-        HausbusBinarySensor("btn", 18, binary_sensor_device, gateway)
-    )
-    binary_sensor_device.channels.append(
-        HausbusBinarySensor("btn", 19, binary_sensor_device, gateway)
-    )
-    binary_sensor_device.channels.append(
-        HausbusBinarySensor("btn", 20, binary_sensor_device, gateway)
-    )
-    binary_sensor_device.channels.append(
-        HausbusBinarySensor("btn", 21, binary_sensor_device, gateway)
-    )
-    binary_sensor_device.channels.append(
-        HausbusBinarySensor("btn", 22, binary_sensor_device, gateway)
-    )
-
-    async_add_entities(binary_sensor_device.channels)
+    async_add_entities(entities)
 
 
 class HausbusBinarySensor(HausbusChannel, BinarySensorEntity):
@@ -54,14 +38,10 @@ class HausbusBinarySensor(HausbusChannel, BinarySensorEntity):
     TYPE = DOMAIN
 
     def __init__(
-        self,
-        channel_type: str,
-        instance_id: int,
-        device: HausbusDevice,
-        gateway: HausbusGateway,
+        self, channel_type: str, instance_id: int, device: HausbusDevice
     ) -> None:
         """Set up binary sensor."""
-        super().__init__(channel_type, instance_id, device, gateway)
+        super().__init__(channel_type, instance_id, device)
 
         self._state = False
 

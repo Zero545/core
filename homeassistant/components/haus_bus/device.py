@@ -2,21 +2,19 @@
 from homeassistant.helpers.entity import DeviceInfo, Entity
 
 from .const import DOMAIN
-from .gateway import HausbusGateway
 
 
 class HausbusDevice:
     """Common base for Haus-Bus devices."""
 
-    def __init__(self, gateway: HausbusGateway) -> None:
+    def __init__(self, bridge_id: str) -> None:
         """Set up Haus-Bus device."""
         self._device_id = "123456"
         self.manufacturer = "Haus-Bus.de"
         self.model_id = "Doppel RGB Dimmer"
         self.name = f"RGB Dimmer ID {self._device_id}"
         self.software_version = "1.0"
-        self._gateway = gateway
-        self._gateway.bridge_id = "42"
+        self.bridge_id = bridge_id
         self.channels: list[HausbusChannel] = []
 
     @property
@@ -36,7 +34,7 @@ class HausbusDevice:
             model=self.model_id,
             name=self.name,
             sw_version=self.software_version,
-            via_device=(DOMAIN, self._gateway.bridge_id),
+            via_device=(DOMAIN, self.bridge_id),
         )
 
 
@@ -46,17 +44,12 @@ class HausbusChannel(Entity):
     _attr_has_entity_name = True
 
     def __init__(
-        self,
-        channel_type: str,
-        instance_id: int,
-        device: HausbusDevice,
-        gateway: HausbusGateway,
+        self, channel_type: str, instance_id: int, device: HausbusDevice
     ) -> None:
         """Set up channel."""
         self._type = channel_type
         self._instance_id = instance_id
         self._device = device
-        self._gateway = gateway
 
     @property
     def unique_id(self) -> str:

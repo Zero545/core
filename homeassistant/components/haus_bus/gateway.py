@@ -2,6 +2,8 @@
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
+from .device import HausbusDevice
+
 
 class HausbusGateway:
     """Manages a single Haus-Bus gateway."""
@@ -11,3 +13,4 @@ class HausbusGateway:
         self.hass = hass
         self.config_entry = config_entry
         self.bridge_id = "1"
+        self.devices: list[HausbusDevice] = []

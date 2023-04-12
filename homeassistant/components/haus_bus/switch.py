@@ -22,13 +22,14 @@ async def async_setup_entry(
 
     er.async_get(hass)
 
-    # search for light entities in discovered devices
+    # search for switch entities in discovered devices
+    entities: list[HausbusSwitch] = []
+    for device in gateway.devices:
+        for channel in device.channels:
+            if isinstance(channel, HausbusSwitch):
+                entities.append(channel)
 
-    switch_device = HausbusDevice(gateway)
-
-    switch_device.channels.append(HausbusSwitch("out", 210, switch_device, gateway))
-
-    async_add_entities(switch_device.channels)
+    async_add_entities(entities)
 
 
 class HausbusSwitch(HausbusChannel, SwitchEntity):
@@ -37,14 +38,10 @@ class HausbusSwitch(HausbusChannel, SwitchEntity):
     TYPE = DOMAIN
 
     def __init__(
-        self,
-        channel_type: str,
-        instance_id: int,
-        device: HausbusDevice,
-        gateway: HausbusGateway,
+        self, channel_type: str, instance_id: int, device: HausbusDevice
     ) -> None:
         """Set up light."""
-        super().__init__(channel_type, instance_id, device, gateway)
+        super().__init__(channel_type, instance_id, device)
 
         self._state = False
 
