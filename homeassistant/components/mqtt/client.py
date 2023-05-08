@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable, Coroutine, Iterable
 from functools import lru_cache
-import inspect
 from itertools import chain, groupby
 import logging
 from operator import attrgetter
@@ -44,7 +43,6 @@ from homeassistant.util.async_ import run_callback_threadsafe
 from homeassistant.util.logging import catch_log_exception
 
 from .const import (
-    ATTR_TOPIC,
     CONF_BIRTH_MESSAGE,
     CONF_BROKER,
     CONF_CERTIFICATE,
@@ -56,10 +54,16 @@ from .const import (
     CONF_WILL_MESSAGE,
     CONF_WS_HEADERS,
     CONF_WS_PATH,
+    DEFAULT_BIRTH,
     DEFAULT_ENCODING,
+    DEFAULT_KEEPALIVE,
+    DEFAULT_PORT,
     DEFAULT_PROTOCOL,
     DEFAULT_QOS,
     DEFAULT_TRANSPORT,
+    DEFAULT_WILL,
+    DEFAULT_WS_HEADERS,
+    DEFAULT_WS_PATH,
     MQTT_CONNECTED,
     MQTT_DISCONNECTED,
     PROTOCOL_5,
@@ -69,6 +73,7 @@ from .const import (
 from .models import (
     AsyncMessageCallbackType,
     MessageCallbackType,
+    MqttData,
     PublishMessage,
     PublishPayloadType,
     ReceiveMessage,
@@ -111,11 +116,11 @@ async def async_publish(
     encoding: str | None = DEFAULT_ENCODING,
 ) -> None:
     """Publish message to a MQTT topic."""
-    mqtt_data = get_mqtt_data(hass, True)
-    if mqtt_data.client is None or not mqtt_config_entry_enabled(hass):
+    if not mqtt_config_entry_enabled(hass):
         raise HomeAssistantError(
             f"Cannot publish to topic '{topic}', MQTT is not enabled"
         )
+    mqtt_data = get_mqtt_data(hass)
     outgoing_payload = payload
     if not isinstance(payload, bytes):
         if not encoding:
@@ -161,30 +166,11 @@ async def async_subscribe(
 
     Call the return value to unsubscribe.
     """
-    mqtt_data = get_mqtt_data(hass, True)
-    if mqtt_data.client is None or not mqtt_config_entry_enabled(hass):
+    if not mqtt_config_entry_enabled(hass):
         raise HomeAssistantError(
             f"Cannot subscribe to topic '{topic}', MQTT is not enabled"
         )
-    # Support for a deprecated callback type was removed with HA core 2023.3.0
-    # The signature validation code can be removed from HA core 2023.5.0
-    non_default = 0
-    if msg_callback:
-        non_default = sum(
-            p.default == inspect.Parameter.empty
-            for _, p in inspect.signature(msg_callback).parameters.items()
-        )
-
-    # Check for not supported callback signatures
-    # Can be removed from HA core 2023.5.0
-    if non_default != 1:
-        module = inspect.getmodule(msg_callback)
-        raise HomeAssistantError(
-            "Signature for MQTT msg_callback '{}.{}' is not supported".format(
-                module.__name__ if module else "<unknown>", msg_callback.__name__
-            )
-        )
-
+    mqtt_data = get_mqtt_data(hass)
     async_remove = await mqtt_data.client.async_subscribe(
         topic,
         catch_log_exception(
@@ -272,8 +258,8 @@ class MqttClientSetup:
         client_cert = get_file_path(CONF_CLIENT_CERT, config.get(CONF_CLIENT_CERT))
         tls_insecure = config.get(CONF_TLS_INSECURE)
         if transport == TRANSPORT_WEBSOCKETS:
-            ws_path: str = config[CONF_WS_PATH]
-            ws_headers: dict[str, str] = config[CONF_WS_HEADERS]
+            ws_path: str = config.get(CONF_WS_PATH, DEFAULT_WS_PATH)
+            ws_headers: dict[str, str] = config.get(CONF_WS_HEADERS, DEFAULT_WS_HEADERS)
             self._client.ws_set_options(ws_path, ws_headers)
         if certificate is not None:
             self._client.tls_set(
@@ -377,19 +363,16 @@ class MQTT:
 
     _mqttc: mqtt.Client
     _last_subscribe: float
+    _mqtt_data: MqttData
 
     def __init__(
-        self,
-        hass: HomeAssistant,
-        config_entry: ConfigEntry,
-        conf: ConfigType,
+        self, hass: HomeAssistant, config_entry: ConfigEntry, conf: ConfigType
     ) -> None:
         """Initialize Home Assistant MQTT client."""
-        self._mqtt_data = get_mqtt_data(hass)
-
         self.hass = hass
         self.config_entry = config_entry
         self.conf = conf
+
         self._simple_subscriptions: dict[str, list[Subscription]] = {}
         self._wildcard_subscriptions: list[Subscription] = []
         self.connected = False
@@ -415,8 +398,6 @@ class MQTT:
 
             self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, ha_started)
 
-        self.init_client()
-
         async def async_stop_mqtt(_event: Event) -> None:
             """Stop MQTT component."""
             await self.async_disconnect()
@@ -424,6 +405,14 @@ class MQTT:
         self._cleanup_on_unload.append(
             hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, async_stop_mqtt)
         )
+
+    def start(
+        self,
+        mqtt_data: MqttData,
+    ) -> None:
+        """Start Home Assistant MQTT client."""
+        self._mqtt_data = mqtt_data
+        self.init_client()
 
     @property
     def subscriptions(self) -> list[Subscription]:
@@ -448,15 +437,8 @@ class MQTT:
         self._mqttc.on_subscribe = self._mqtt_on_callback
         self._mqttc.on_unsubscribe = self._mqtt_on_callback
 
-        if (
-            CONF_WILL_MESSAGE in self.conf
-            and ATTR_TOPIC in self.conf[CONF_WILL_MESSAGE]
-        ):
-            will_message = PublishMessage(**self.conf[CONF_WILL_MESSAGE])
-        else:
-            will_message = None
-
-        if will_message is not None:
+        if will := self.conf.get(CONF_WILL_MESSAGE, DEFAULT_WILL):
+            will_message = PublishMessage(**will)
             self._mqttc.will_set(
                 topic=will_message.topic,
                 payload=will_message.payload,
@@ -499,8 +481,8 @@ class MQTT:
             result = await self.hass.async_add_executor_job(
                 self._mqttc.connect,
                 self.conf[CONF_BROKER],
-                self.conf[CONF_PORT],
-                self.conf[CONF_KEEPALIVE],
+                self.conf.get(CONF_PORT, DEFAULT_PORT),
+                self.conf.get(CONF_KEEPALIVE, DEFAULT_KEEPALIVE),
             )
         except OSError as err:
             _LOGGER.error("Failed to connect to MQTT server due to exception: %s", err)
@@ -662,7 +644,6 @@ class MQTT:
 
     async def _async_perform_subscriptions(self) -> None:
         """Perform MQTT client subscriptions."""
-        subscriptions: dict[str, int]
         # Section 3.3.1.3 in the specification:
         # http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html
         # When sending a PUBLISH Packet to a Client the Server MUST
@@ -675,36 +656,26 @@ class MQTT:
         # Since we do not know if a published value is retained we need to
         # (re)subscribe, to ensure retained messages are replayed
 
-        def _process_client_subscriptions() -> list[tuple[int, int]]:
-            """Initiate all subscriptions on the MQTT client and return the results."""
-            subscribe_result_list = []
-            for topic, qos in subscriptions.items():
-                result, mid = self._mqttc.subscribe(topic, qos)
-                subscribe_result_list.append((result, mid))
-                _LOGGER.debug("Subscribing to %s, mid: %s, qos: %s", topic, mid, qos)
-            return subscribe_result_list
+        if not self._pending_subscriptions:
+            return
 
-        subscriptions = self._pending_subscriptions
+        subscriptions: dict[str, int] = self._pending_subscriptions
         self._pending_subscriptions = {}
 
         async with self._paho_lock:
-            results = await self.hass.async_add_executor_job(
-                _process_client_subscriptions
+            subscription_list = list(subscriptions.items())
+            result, mid = await self.hass.async_add_executor_job(
+                self._mqttc.subscribe, subscription_list
             )
+
+        for topic, qos in subscriptions.items():
+            _LOGGER.debug("Subscribing to %s, mid: %s, qos: %s", topic, mid, qos)
         self._last_subscribe = time.time()
 
-        tasks: list[Coroutine[Any, Any, None]] = []
-        errors: list[int] = []
-        for result, mid in results:
-            if result == 0:
-                tasks.append(self._wait_for_mid(mid))
-            else:
-                errors.append(result)
-
-        if tasks:
-            await asyncio.gather(*tasks)
-        if errors:
-            _raise_on_errors(errors)
+        if result == 0:
+            await self._wait_for_mid(mid)
+        else:
+            _raise_on_error(result)
 
     def _mqtt_on_connect(
         self,
@@ -734,16 +705,13 @@ class MQTT:
         _LOGGER.info(
             "Connected to MQTT server %s:%s (%s)",
             self.conf[CONF_BROKER],
-            self.conf[CONF_PORT],
+            self.conf.get(CONF_PORT, DEFAULT_PORT),
             result_code,
         )
 
         self.hass.create_task(self._async_resubscribe())
 
-        if (
-            CONF_BIRTH_MESSAGE in self.conf
-            and ATTR_TOPIC in self.conf[CONF_BIRTH_MESSAGE]
-        ):
+        if birth := self.conf.get(CONF_BIRTH_MESSAGE, DEFAULT_BIRTH):
 
             async def publish_birth_message(birth_message: PublishMessage) -> None:
                 await self._ha_started.wait()  # Wait for Home Assistant to start
@@ -757,10 +725,13 @@ class MQTT:
                     retain=birth_message.retain,
                 )
 
-            birth_message = PublishMessage(**self.conf[CONF_BIRTH_MESSAGE])
+            birth_message = PublishMessage(**birth)
             asyncio.run_coroutine_threadsafe(
                 publish_birth_message(birth_message), self.hass.loop
             )
+        else:
+            # Update subscribe cooldown period to a shorter time
+            self._subscribe_debouncer.set_timeout(SUBSCRIBE_COOLDOWN)
 
     async def _async_resubscribe(self) -> None:
         """Resubscribe on reconnect."""
@@ -876,7 +847,7 @@ class MQTT:
         _LOGGER.warning(
             "Disconnected from MQTT server %s:%s (%s)",
             self.conf[CONF_BROKER],
-            self.conf[CONF_PORT],
+            self.conf.get(CONF_PORT, DEFAULT_PORT),
             result_code,
         )
 
@@ -922,22 +893,13 @@ class MQTT:
             )
 
 
-def _raise_on_errors(result_codes: Iterable[int]) -> None:
+def _raise_on_error(result_code: int) -> None:
     """Raise error if error result."""
     # pylint: disable-next=import-outside-toplevel
     import paho.mqtt.client as mqtt
 
-    if messages := [
-        mqtt.error_string(result_code)
-        for result_code in result_codes
-        if result_code != 0
-    ]:
-        raise HomeAssistantError(f"Error talking to MQTT: {', '.join(messages)}")
-
-
-def _raise_on_error(result_code: int) -> None:
-    """Raise error if error result."""
-    _raise_on_errors((result_code,))
+    if result_code and (message := mqtt.error_string(result_code)):
+        raise HomeAssistantError(f"Error talking to MQTT: {message}")
 
 
 def _matcher_for_topic(subscription: str) -> Any:
