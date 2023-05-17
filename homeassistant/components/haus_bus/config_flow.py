@@ -64,13 +64,13 @@ class HausBusHub:
         """Initialize."""
         self.host_type = host_type
 
-    async def authenticate_ip_gateway(self, ip: str) -> bool:
-        """Test if we can authenticate with the ip gateway."""
+    async def verify_ip_gateway(self, ip: str) -> bool:
+        """Test if we can communicate with the ip gateway."""
         # TODO validate the data can be used to set up a connection.
         return True
 
-    async def authenticate_usb_rs485(self, path: str) -> bool:
-        """Test if we can authenticate with the USB RS-485 adapter."""
+    async def verify_usb_rs485(self, path: str) -> bool:
+        """Test if we can communicate with the bus via USB RS-485 adapter."""
         # TODO validate the data can be used to set up a connection.
         return True
 
@@ -91,12 +91,12 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     hub = HausBusHub(data[CONF_GATEWAY_TYPE])
 
     if hub.host_type == TYPE_IP_GATEWAY:
-        if not await hub.authenticate_ip_gateway(data[CONF_IP_ADDRESS]):
-            raise InvalidAuth
+        if not await hub.verify_ip_gateway(data[CONF_IP_ADDRESS]):
+            raise CannotConnect
 
     if hub.host_type == TYPE_RS_485_ADAPTER:
-        if not await hub.authenticate_usb_rs485(data[CONF_DEVICE_PATH]):
-            raise InvalidAuth
+        if not await hub.verify_usb_rs485(data[CONF_DEVICE_PATH]):
+            raise CannotConnect
 
     # If you cannot connect:
     # throw CannotConnect
