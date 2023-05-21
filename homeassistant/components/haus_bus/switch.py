@@ -44,7 +44,7 @@ class HausbusSwitch(HausbusChannel, SwitchEntity):
         gateway: HausbusGateway,
     ) -> None:
         """Set up light."""
-        super().__init__(channel_type, instance_id, device, gateway)
+        super().__init__(channel_type, instance_id, device)
 
         self._state = False
 

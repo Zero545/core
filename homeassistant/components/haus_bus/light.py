@@ -10,7 +10,6 @@ from homeassistant.components.light import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN as HAUSBUSDOMAIN
@@ -25,16 +24,15 @@ async def async_setup_entry(
     """Set up the Haus-Bus lights from a config entry."""
     gateway = cast(HausbusGateway, hass.data[HAUSBUSDOMAIN][config_entry.entry_id])
 
-    er.async_get(hass)
+    @callback
+    def async_add_light(channel: HausbusChannel) -> None:
+        """Add light from Haus-Bus."""
+        entities: list[HausbusLight] = []
+        if isinstance(channel, HausbusLight):
+            entities.append(channel)
+        async_add_entities(entities)
 
-    # search for light entities in discovered devices
-    entities: list[HausbusLight] = []
-    for device in gateway.devices:
-        for channel in device.channels:
-            if isinstance(channel, HausbusLight):
-                entities.append(channel)
-
-    async_add_entities(entities)
+    gateway.register_platform_add_device_callback(async_add_light, DOMAIN)
 
 
 class HausbusLight(HausbusChannel, LightEntity):
@@ -50,7 +48,7 @@ class HausbusLight(HausbusChannel, LightEntity):
         gateway: HausbusGateway,
     ) -> None:
         """Set up light."""
-        super().__init__(channel_type, instance_id, device, gateway)
+        super().__init__(channel_type, instance_id, device)
 
         self._state = 0
         self._brightness = 255

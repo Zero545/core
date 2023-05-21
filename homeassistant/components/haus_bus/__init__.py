@@ -31,7 +31,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = gateway
 
     # double RGB dimmer dummy device
-    device = HausbusDevice(gateway.bridge_id)
+    device = HausbusDevice(gateway.bridge_id, "123456", "Test 1.2", "Test")
 
     device.channels.append(HausbusLight("dim", 1, device, gateway))
     device.channels.append(HausbusLight("dim", 2, device, gateway))
@@ -47,13 +47,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     device.channels.append(HausbusBinarySensor("btn", 19, device, gateway))
     device.channels.append(HausbusBinarySensor("btn", 20, device, gateway))
     device.channels.append(HausbusBinarySensor("btn", 21, device, gateway))
-    device.channels.append(HausbusChannel("tst", 22, device, gateway))
+    device.channels.append(HausbusChannel("tst", 22, device))
 
     device.channels.append(HausbusSwitch("out", 210, device, gateway))
 
     gateway.devices.append(device)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # search devices after adding all callbacks to the gateway object
+    gateway.home_server.searchDevices()
 
     # add device services: needs a services.yaml. Can be moved to separate services.py (see deconz integration)
     @callback

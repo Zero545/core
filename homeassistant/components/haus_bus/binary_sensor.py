@@ -44,7 +44,7 @@ class HausbusBinarySensor(HausbusChannel, BinarySensorEntity):
         gateway: HausbusGateway,
     ) -> None:
         """Set up binary sensor."""
-        super().__init__(channel_type, instance_id, device, gateway)
+        super().__init__(channel_type, instance_id, device)
 
         self._state = False
 
