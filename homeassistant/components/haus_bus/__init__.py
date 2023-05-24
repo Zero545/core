@@ -10,7 +10,6 @@ from homeassistant.core import HomeAssistant, callback
 from .binary_sensor import HausbusBinarySensor
 from .const import DOMAIN
 from .gateway import HausbusChannel, HausbusDevice, HausbusGateway
-from .light import HausbusLight
 from .switch import HausbusSwitch
 
 # TODO List the platforms that you want to support.
@@ -33,25 +32,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # double RGB dimmer dummy device
     device = HausbusDevice(gateway.bridge_id, "123456", "Test 1.2", "Test")
 
-    device.channels.append(HausbusLight("dim", 1, device, gateway))
-    device.channels.append(HausbusLight("dim", 2, device, gateway))
-    device.channels.append(HausbusLight("dim", 3, device, gateway))
-    device.channels.append(HausbusLight("dim", 4, device, gateway))
-    device.channels.append(HausbusLight("dim", 5, device, gateway))
-    device.channels.append(HausbusLight("dim", 6, device, gateway))
-    device.channels.append(HausbusLight("rgb", 1, device, gateway))
-    device.channels.append(HausbusLight("rgb", 2, device, gateway))
+    gateway.channels["123456"] = {}
 
-    device.channels.append(HausbusBinarySensor("btn", 17, device, gateway))
-    device.channels.append(HausbusBinarySensor("btn", 18, device, gateway))
-    device.channels.append(HausbusBinarySensor("btn", 19, device, gateway))
-    device.channels.append(HausbusBinarySensor("btn", 20, device, gateway))
-    device.channels.append(HausbusBinarySensor("btn", 21, device, gateway))
-    device.channels.append(HausbusChannel("tst", 22, device))
+    gateway.channels["123456"]["17"] = HausbusBinarySensor("btn", 17, device, gateway)
+    gateway.channels["123456"]["18"] = HausbusBinarySensor("btn", 18, device, gateway)
+    gateway.channels["123456"]["19"] = HausbusBinarySensor("btn", 19, device, gateway)
+    gateway.channels["123456"]["20"] = HausbusBinarySensor("btn", 20, device, gateway)
+    gateway.channels["123456"]["21"] = HausbusBinarySensor("btn", 21, device, gateway)
+    gateway.channels["123456"]["22"] = HausbusChannel("tst", 22, device)
 
-    device.channels.append(HausbusSwitch("out", 210, device, gateway))
+    gateway.channels["123456"]["210"] = HausbusSwitch("out", 210, device, gateway)
 
-    gateway.devices.append(device)
+    gateway.devices["123456"] = device
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

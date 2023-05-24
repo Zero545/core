@@ -23,8 +23,8 @@ async def async_setup_entry(
 
     # search for binary sensor entities in discovered devices
     entities: list[HausbusBinarySensor] = []
-    for device in gateway.devices:
-        for channel in device.channels:
+    for device in gateway.channels.values():
+        for channel in device.values():
             if isinstance(channel, HausbusBinarySensor):
                 entities.append(channel)
 

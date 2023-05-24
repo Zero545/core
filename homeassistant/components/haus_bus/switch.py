@@ -23,8 +23,8 @@ async def async_setup_entry(
 
     # search for switch entities in discovered devices
     entities: list[HausbusSwitch] = []
-    for device in gateway.devices:
-        for channel in device.channels:
+    for device in gateway.channels.values():
+        for channel in device.values():
             if isinstance(channel, HausbusSwitch):
                 entities.append(channel)
 
