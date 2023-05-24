@@ -64,7 +64,10 @@ class HausbusGateway(IBusDataListener, IEventHandler):
         dummy, class_type = str(type(instance)).rsplit(".", 1)
         class_type = class_type[:-2]
         object_id = ObjectId(instance.getObjectId())
-        if object_id.getInstanceId() not in self.channels[str(object_id.getDeviceId())]:
+        if (
+            str(object_id.getInstanceId())
+            not in self.channels[str(object_id.getDeviceId())]
+        ):
             if class_type == "Dimmer":
                 dimmer = HausbusLight(
                     "dim",
