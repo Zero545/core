@@ -10,7 +10,6 @@ from homeassistant.core import HomeAssistant, callback
 from .binary_sensor import HausbusBinarySensor
 from .const import DOMAIN
 from .gateway import HausbusChannel, HausbusDevice, HausbusGateway
-from .switch import HausbusSwitch
 
 # TODO List the platforms that you want to support.
 # For your initial PR, limit it to 1 platform.
@@ -34,14 +33,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     gateway.channels["123456"] = {}
 
-    gateway.channels["123456"]["17"] = HausbusBinarySensor("btn", 17, device, gateway)
-    gateway.channels["123456"]["18"] = HausbusBinarySensor("btn", 18, device, gateway)
-    gateway.channels["123456"]["19"] = HausbusBinarySensor("btn", 19, device, gateway)
-    gateway.channels["123456"]["20"] = HausbusBinarySensor("btn", 20, device, gateway)
-    gateway.channels["123456"]["21"] = HausbusBinarySensor("btn", 21, device, gateway)
-    gateway.channels["123456"]["22"] = HausbusChannel("tst", 22, device)
-
-    gateway.channels["123456"]["210"] = HausbusSwitch("out", 210, device, gateway)
+    gateway.channels["123456"][("16", "17")] = HausbusBinarySensor(
+        "btn", 17, device, gateway
+    )
+    gateway.channels["123456"][("16", "18")] = HausbusBinarySensor(
+        "btn", 18, device, gateway
+    )
+    gateway.channels["123456"][("16", "19")] = HausbusBinarySensor(
+        "btn", 19, device, gateway
+    )
+    gateway.channels["123456"][("16", "20")] = HausbusBinarySensor(
+        "btn", 20, device, gateway
+    )
+    gateway.channels["123456"][("16", "21")] = HausbusBinarySensor(
+        "btn", 21, device, gateway
+    )
+    gateway.channels["123456"][("16", "22")] = HausbusChannel("tst", 22, device)
 
     gateway.devices["123456"] = device
 

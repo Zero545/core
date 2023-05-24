@@ -35,7 +35,7 @@ class HausbusGateway(IBusDataListener, IEventHandler):
         self.config_entry = config_entry
         self.bridge_id = "1"
         self.devices: dict[str, HausbusDevice] = {}
-        self.channels: dict[str, dict[str, HausbusChannel]] = {}
+        self.channels: dict[str, dict[tuple[str, str], HausbusChannel]] = {}
         self.home_server = HomeServer()
         self.home_server.addBusEventListener(self)
         self._listeners: dict[
@@ -65,9 +65,9 @@ class HausbusGateway(IBusDataListener, IEventHandler):
         class_type = class_type[:-2]
         object_id = ObjectId(instance.getObjectId())
         if (
-            str(object_id.getInstanceId())
-            not in self.channels[str(object_id.getDeviceId())]
-        ):
+            str(object_id.getClassId()),
+            str(object_id.getInstanceId()),
+        ) not in self.channels[str(object_id.getDeviceId())]:
             if class_type == "Dimmer":
                 dimmer = HausbusLight(
                     "dim",
@@ -76,7 +76,7 @@ class HausbusGateway(IBusDataListener, IEventHandler):
                     instance,
                 )
                 self.channels[str(object_id.getDeviceId())][
-                    str(object_id.getInstanceId())
+                    (str(object_id.getClassId()), str(object_id.getInstanceId()))
                 ] = dimmer
                 asyncio.run_coroutine_threadsafe(
                     self._listeners[LIGHT_DOMAIN](dimmer), self.hass.loop
@@ -89,7 +89,7 @@ class HausbusGateway(IBusDataListener, IEventHandler):
                     instance,
                 )
                 self.channels[str(object_id.getDeviceId())][
-                    str(object_id.getInstanceId())
+                    (str(object_id.getClassId()), str(object_id.getInstanceId()))
                 ] = dimmer
                 asyncio.run_coroutine_threadsafe(
                     self._listeners[LIGHT_DOMAIN](dimmer), self.hass.loop
