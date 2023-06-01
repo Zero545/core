@@ -1,6 +1,9 @@
 """The hausbus integration."""
 from __future__ import annotations
 
+from pyhausbus.de.hausbus.homeassistant.proxy.controller.params.EFirmwareId import (
+    EFirmwareId,
+)
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
@@ -29,7 +32,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = gateway
 
     # double RGB dimmer dummy device
-    device = HausbusDevice(gateway.bridge_id, "123456", "Test 1.2", "Test")
+    device = HausbusDevice(
+        gateway.bridge_id, "123456", "Test 1.2", "Test", EFirmwareId.SER_UNKNOWN
+    )
 
     gateway.channels["123456"] = {}
 

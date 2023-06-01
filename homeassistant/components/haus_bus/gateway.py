@@ -11,6 +11,9 @@ from pyhausbus.HomeServer import HomeServer
 from pyhausbus.IBusDataListener import IBusDataListener
 from pyhausbus.ObjectId import ObjectId
 from pyhausbus.de.hausbus.homeassistant.proxy.Controller import Controller
+from pyhausbus.de.hausbus.homeassistant.proxy.controller.data.Configuration import (
+    Configuration,
+)
 from pyhausbus.de.hausbus.homeassistant.proxy.controller.data.ModuleId import ModuleId
 from pyhausbus.de.hausbus.homeassistant.proxy.controller.data.RemoteObjects import (
     RemoteObjects,
@@ -53,6 +56,7 @@ class HausbusGateway(IBusDataListener, IEventHandler):
             + "."
             + str(module.getMinorRelease()),
             module.getName(),
+            module.getFirmwareId(),
         )
         if device_id not in self.devices:
             self.devices[device_id] = device
@@ -101,12 +105,22 @@ class HausbusGateway(IBusDataListener, IEventHandler):
             # ignore messages sent from this module
             return
 
+        controller = Controller(busDataMessage.getSenderObjectId())
+
         if isinstance(busDataMessage.getData(), ModuleId):
             self.add_device(
                 str(HausBusUtils.getDeviceId(busDataMessage.getSenderObjectId())),
                 busDataMessage.getData(),
             )
-            Controller(busDataMessage.getSenderObjectId()).getRemoteObjects()
+            controller.getConfiguration()
+
+        if isinstance(busDataMessage.getData(), Configuration):
+            config: Configuration = busDataMessage.getData()
+            device = self.devices[
+                str(HausBusUtils.getDeviceId(busDataMessage.getSenderObjectId()))
+            ]
+            device.set_type(config.getFCKE())
+            controller.getRemoteObjects()
 
         if isinstance(busDataMessage.getData(), RemoteObjects):
             instances: list[ABusFeature] = self.home_server.getDeviceInstances(
