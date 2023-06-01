@@ -11,6 +11,8 @@ from pyhausbus.HomeServer import HomeServer
 from pyhausbus.IBusDataListener import IBusDataListener
 from pyhausbus.ObjectId import ObjectId
 from pyhausbus.de.hausbus.homeassistant.proxy.Controller import Controller
+from pyhausbus.de.hausbus.homeassistant.proxy.Dimmer import Dimmer
+from pyhausbus.de.hausbus.homeassistant.proxy.RGBDimmer import RGBDimmer
 from pyhausbus.de.hausbus.homeassistant.proxy.controller.data.Configuration import (
     Configuration,
 )
@@ -63,41 +65,36 @@ class HausbusGateway(IBusDataListener, IEventHandler):
         if device_id not in self.channels:
             self.channels[device_id] = {}
 
+    def add_light_channel(
+        self, instance: ABusFeature, object_id: ObjectId, light_type: str
+    ):
+        """Add a new Haus-Bus Light Channel to this gateways channel list."""
+        light = HausbusLight(
+            light_type,
+            object_id.getInstanceId(),
+            self.devices[str(object_id.getDeviceId())],
+            instance,
+        )
+        self.channels[str(object_id.getDeviceId())][
+            (str(object_id.getClassId()), str(object_id.getInstanceId()))
+        ] = light
+        asyncio.run_coroutine_threadsafe(
+            self._listeners[LIGHT_DOMAIN](light), self.hass.loop
+        ).result()
+
     def add_channel(self, instance: ABusFeature):
         """Add a new Haus-Bus Channel to this gateways channel list."""
-        dummy, class_type = str(type(instance)).rsplit(".", 1)
-        class_type = class_type[:-2]
         object_id = ObjectId(instance.getObjectId())
+        class_id = object_id.getClassId()
         if (
-            str(object_id.getClassId()),
+            str(class_id),
             str(object_id.getInstanceId()),
         ) not in self.channels[str(object_id.getDeviceId())]:
-            if class_type == "Dimmer":
-                dimmer = HausbusLight(
-                    "dim",
-                    object_id.getInstanceId(),
-                    self.devices[str(object_id.getDeviceId())],
-                    instance,
-                )
-                self.channels[str(object_id.getDeviceId())][
-                    (str(object_id.getClassId()), str(object_id.getInstanceId()))
-                ] = dimmer
-                asyncio.run_coroutine_threadsafe(
-                    self._listeners[LIGHT_DOMAIN](dimmer), self.hass.loop
-                ).result()
-            elif class_type == "RGBDimmer":
-                dimmer = HausbusLight(
-                    "rgb",
-                    object_id.getInstanceId(),
-                    self.devices[str(object_id.getDeviceId())],
-                    instance,
-                )
-                self.channels[str(object_id.getDeviceId())][
-                    (str(object_id.getClassId()), str(object_id.getInstanceId()))
-                ] = dimmer
-                asyncio.run_coroutine_threadsafe(
-                    self._listeners[LIGHT_DOMAIN](dimmer), self.hass.loop
-                ).result()
+            match class_id:
+                case Dimmer.CLASS_ID:
+                    self.add_light_channel(instance, object_id, "dim")
+                case RGBDimmer.CLASS_ID:
+                    self.add_light_channel(instance, object_id, "rgb")
 
     def busDataReceived(self, busDataMessage: BusDataMessage):
         """Handle Haus-Bus messages."""
