@@ -1,5 +1,8 @@
 """Representation of a Haus-Bus channel."""
 
+from typing import Any
+
+from homeassistant.core import callback
 from homeassistant.helpers.entity import DeviceInfo, Entity
 
 from .device import HausbusDevice
@@ -41,3 +44,7 @@ class HausbusChannel(Entity):
         if self._instance_id != 210:
             return f"{super().name} {self._instance_id}"
         return super().name
+
+    @callback
+    def async_update_callback(self, **kwargs: Any) -> None:
+        """State push update."""
