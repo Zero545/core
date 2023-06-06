@@ -4,6 +4,7 @@ from typing import Any, cast
 
 from pyhausbus.ABusFeature import ABusFeature
 from pyhausbus.de.hausbus.homeassistant.proxy.Dimmer import Dimmer
+from pyhausbus.de.hausbus.homeassistant.proxy.Led import Led
 from pyhausbus.de.hausbus.homeassistant.proxy.RGBDimmer import RGBDimmer
 
 from homeassistant.components.light import (
@@ -18,7 +19,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .channel import HausbusChannel
-from .const import DOMAIN as HAUSBUSDOMAIN
+from .const import ATTR_ON_STATE, DOMAIN as HAUSBUSDOMAIN
 from .device import HausbusDevice
 from .event_handler import IEventHandler
 
@@ -39,7 +40,7 @@ async def async_setup_entry(
             entities.append(channel)
         async_add_entities(entities)
 
-    gateway.register_platform_add_device_callback(async_add_light, DOMAIN)
+    gateway.register_platform_add_channel_callback(async_add_light, DOMAIN)
 
 
 class HausbusLight(HausbusChannel, LightEntity):
@@ -49,13 +50,12 @@ class HausbusLight(HausbusChannel, LightEntity):
 
     def __init__(
         self,
-        channel_type: str,
         instance_id: int,
         device: HausbusDevice,
         channel: ABusFeature,
     ) -> None:
         """Set up light."""
-        super().__init__(channel_type, instance_id, device)
+        super().__init__(channel.__class__.__name__, instance_id, device)
 
         self._state = 0
         self._brightness = 255
@@ -67,6 +67,9 @@ class HausbusLight(HausbusChannel, LightEntity):
         if isinstance(self._channel, Dimmer):
             self._attr_supported_color_modes.add(ColorMode.BRIGHTNESS)
             cast(Dimmer, self._channel.getStatus())
+        if isinstance(self._channel, Led):
+            self._attr_supported_color_modes.add(ColorMode.BRIGHTNESS)
+            cast(Led, self._channel.getStatus())
         if isinstance(self._channel, RGBDimmer):
             self._attr_supported_color_modes.add(ColorMode.HS)
             cast(RGBDimmer, self._channel.getStatus())
@@ -74,9 +77,9 @@ class HausbusLight(HausbusChannel, LightEntity):
     @property
     def color_mode(self) -> str | None:
         """Return the color mode of the light."""
-        if self._type == "dim":
+        if isinstance(self._channel, (Dimmer, Led)):
             color_mode = ColorMode.BRIGHTNESS
-        elif self._type == "rgb":
+        elif isinstance(self._channel, RGBDimmer):
             color_mode = ColorMode.HS
         else:
             color_mode = ColorMode.ONOFF
@@ -107,6 +110,10 @@ class HausbusLight(HausbusChannel, LightEntity):
             light = cast(Dimmer, light)
             brightness = brightness * 100 // 255
             light.setBrightness(brightness, 0)
+        elif isinstance(light, Led):
+            light = cast(Led, light)
+            brightness = brightness * 100 // 255
+            light.setBrightness(brightness, 0)
         elif isinstance(self._channel, RGBDimmer):
             light = cast(RGBDimmer, light)
             rgb = colorsys.hsv_to_rgb(h_s[0] / 360, h_s[1] / 100, brightness / 255)
@@ -118,6 +125,9 @@ class HausbusLight(HausbusChannel, LightEntity):
         light = self._channel
         if isinstance(light, Dimmer):
             light = cast(Dimmer, light)
+            light.setBrightness(0, 0)
+        elif isinstance(light, Led):
+            light = cast(Led, light)
             light.setBrightness(0, 0)
         elif isinstance(light, RGBDimmer):
             light = cast(RGBDimmer, light)
@@ -136,9 +146,9 @@ class HausbusLight(HausbusChannel, LightEntity):
     def async_update_callback(self, **kwargs: Any) -> None:
         """Light state push update."""
         state_changed = False
-        if "on_state" in kwargs:
-            if self._state != kwargs["on_state"]:
-                self._state = kwargs["on_state"]
+        if ATTR_ON_STATE in kwargs:
+            if self._state != kwargs[ATTR_ON_STATE]:
+                self._state = kwargs[ATTR_ON_STATE]
                 state_changed = True
 
         if ATTR_BRIGHTNESS in kwargs:

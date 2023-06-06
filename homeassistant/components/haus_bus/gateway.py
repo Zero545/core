@@ -5,7 +5,6 @@ from collections.abc import Callable, Coroutine
 import colorsys
 from typing import Any, cast
 
-from pyhausbus import HausBusUtils
 from pyhausbus.ABusFeature import ABusFeature
 from pyhausbus.BusDataMessage import BusDataMessage
 from pyhausbus.HomeServer import HomeServer
@@ -13,6 +12,7 @@ from pyhausbus.IBusDataListener import IBusDataListener
 from pyhausbus.ObjectId import ObjectId
 from pyhausbus.de.hausbus.homeassistant.proxy.Controller import Controller
 from pyhausbus.de.hausbus.homeassistant.proxy.Dimmer import Dimmer
+from pyhausbus.de.hausbus.homeassistant.proxy.Led import Led
 from pyhausbus.de.hausbus.homeassistant.proxy.RGBDimmer import RGBDimmer
 from pyhausbus.de.hausbus.homeassistant.proxy.controller.data.Configuration import (
     Configuration,
@@ -28,6 +28,9 @@ from pyhausbus.de.hausbus.homeassistant.proxy.dimmer.data.EvOn import EvOn as Di
 from pyhausbus.de.hausbus.homeassistant.proxy.dimmer.data.Status import (
     Status as DimmerStatus,
 )
+from pyhausbus.de.hausbus.homeassistant.proxy.led.data.EvOff import EvOff as ledEvOff
+from pyhausbus.de.hausbus.homeassistant.proxy.led.data.EvOn import EvOn as ledEvOn
+from pyhausbus.de.hausbus.homeassistant.proxy.led.data.Status import Status as ledStatus
 from pyhausbus.de.hausbus.homeassistant.proxy.rGBDimmer.data.EvOff import (
     EvOff as rgbDimmerEvOff,
 )
@@ -47,6 +50,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .channel import HausbusChannel
+from .const import ATTR_ON_STATE
 from .device import HausbusDevice
 from .event_handler import IEventHandler
 from .light import HausbusLight
@@ -64,7 +68,7 @@ class HausbusGateway(IBusDataListener, IEventHandler):
         self.channels: dict[str, dict[tuple[str, str], HausbusChannel]] = {}
         self.home_server = HomeServer()
         self.home_server.addBusEventListener(self)
-        self._listeners: dict[
+        self._new_channel_listeners: dict[
             str, Callable[[HausbusChannel], Coroutine[Any, Any, None]]
         ] = {}
 
@@ -86,188 +90,165 @@ class HausbusGateway(IBusDataListener, IEventHandler):
         if device_id not in self.channels:
             self.channels[device_id] = {}
 
-    def add_light_channel(
-        self, instance: ABusFeature, object_id: ObjectId, light_type: str
-    ):
+    def get_device(self, object_id: ObjectId) -> HausbusDevice:
+        """Get the device referenced by ObjectId from the devices list."""
+        return self.devices[str(object_id.getDeviceId())]
+
+    def get_channel_list(
+        self, object_id: ObjectId
+    ) -> dict[tuple[str, str], HausbusChannel]:
+        """Get the channel list of a device referenced by ObjectId."""
+        return self.channels[str(object_id.getDeviceId())]
+
+    def get_channel_id(self, object_id: ObjectId) -> tuple[str, str]:
+        """Get the channel identifier from an ObjectId."""
+        return (str(object_id.getClassId()), str(object_id.getInstanceId()))
+
+    def get_channel(self, object_id: ObjectId) -> HausbusChannel:
+        """Get channel from channel list."""
+        channels = self.get_channel_list(object_id)
+        channel_id = self.get_channel_id(object_id)
+        return channels[channel_id]
+
+    def is_light_channel(self, class_id: int) -> bool:
+        """Check if a class_id is a light."""
+        if class_id in (Dimmer.CLASS_ID, RGBDimmer.CLASS_ID, Led.CLASS_ID):
+            return True
+        return False
+
+    def add_light_channel(self, instance: ABusFeature, object_id: ObjectId):
         """Add a new Haus-Bus Light Channel to this gateways channel list."""
         light = HausbusLight(
-            light_type,
             object_id.getInstanceId(),
-            self.devices[str(object_id.getDeviceId())],
+            self.get_device(object_id),
             instance,
         )
-        self.channels[str(object_id.getDeviceId())][
-            (str(object_id.getClassId()), str(object_id.getInstanceId()))
-        ] = light
+        self.get_channel_list(object_id)[self.get_channel_id(object_id)] = light
         asyncio.run_coroutine_threadsafe(
-            self._listeners[LIGHT_DOMAIN](light), self.hass.loop
+            self._new_channel_listeners[LIGHT_DOMAIN](light), self.hass.loop
         ).result()
 
     def add_channel(self, instance: ABusFeature):
         """Add a new Haus-Bus Channel to this gateways channel list."""
         object_id = ObjectId(instance.getObjectId())
-        class_id = object_id.getClassId()
-        if (
-            str(class_id),
-            str(object_id.getInstanceId()),
-        ) not in self.channels[str(object_id.getDeviceId())]:
-            match class_id:
-                case Dimmer.CLASS_ID:
-                    self.add_light_channel(instance, object_id, "dim")
-                case RGBDimmer.CLASS_ID:
-                    self.add_light_channel(instance, object_id, "rgb")
+        if self.get_channel_id(object_id) not in self.get_channel_list(object_id):
+            if self.is_light_channel(object_id.getClassId()):
+                self.add_light_channel(instance, object_id)
+
+    def set_light_color(self, channel: HausbusChannel, red: int, green: int, blue: int):
+        """Set the brightness of a light channel."""
+        hue, saturation, value = colorsys.rgb_to_hsv(
+            red / 100.0,
+            green / 100.0,
+            blue / 100.0,
+        )
+        params = {
+            ATTR_ON_STATE: 1,
+            ATTR_BRIGHTNESS: round(value * 255),
+            ATTR_HS_COLOR: (round(hue * 360), round(saturation * 100)),
+        }
+        channel.async_update_callback(**params)
+
+    def set_light_brightness(self, channel: HausbusChannel, brightness: int):
+        """Set the brightness of a light channel."""
+        params = {ATTR_ON_STATE: 1, ATTR_BRIGHTNESS: (brightness * 255) // 100}
+        channel.async_update_callback(**params)
+
+    def light_turn_off(self, channel: HausbusChannel):
+        """Turn off a light channel."""
+        params = {
+            ATTR_ON_STATE: 0,
+        }
+        channel.async_update_callback(**params)
 
     def busDataReceived(self, busDataMessage: BusDataMessage):
         """Handle Haus-Bus messages."""
-        if HausBusUtils.getDeviceId(busDataMessage.getSenderObjectId()) == 9998:
+        object_id = ObjectId(busDataMessage.getSenderObjectId())
+        data = busDataMessage.getData()
+
+        if object_id.getDeviceId() == 9998:
             # ignore messages sent from this module
             return
 
-        controller = Controller(busDataMessage.getSenderObjectId())
+        controller = Controller(object_id.getValue())
 
-        if isinstance(busDataMessage.getData(), ModuleId):
+        if isinstance(data, ModuleId):
             self.add_device(
-                str(HausBusUtils.getDeviceId(busDataMessage.getSenderObjectId())),
-                busDataMessage.getData(),
+                str(object_id.getDeviceId()),
+                data,
             )
             controller.getConfiguration()
-
-        if isinstance(busDataMessage.getData(), Configuration):
-            config: Configuration = busDataMessage.getData()
-            device = self.devices[
-                str(HausBusUtils.getDeviceId(busDataMessage.getSenderObjectId()))
-            ]
+        if isinstance(data, Configuration):
+            config = cast(Configuration, data)
+            device = self.get_device(object_id)
             device.set_type(config.getFCKE())
             controller.getRemoteObjects()
-
-        if isinstance(busDataMessage.getData(), RemoteObjects):
+        if isinstance(data, RemoteObjects):
             instances: list[ABusFeature] = self.home_server.getDeviceInstances(
-                busDataMessage.getSenderObjectId(), busDataMessage.getData()
+                object_id.getValue(), data
             )
             for instance in instances:
                 # handle channels for the sending device
                 self.add_channel(instance)
-        if isinstance(busDataMessage.getData(), DimmerEvOn):
-            channels = self.channels[
-                str(HausBusUtils.getDeviceId(busDataMessage.getSenderObjectId()))
-            ]
-            channel = channels[
-                (
-                    str(HausBusUtils.getClassId(busDataMessage.getSenderObjectId())),
-                    str(HausBusUtils.getInstanceId(busDataMessage.getSenderObjectId())),
-                )
-            ]
-            event = cast(DimmerEvOn, busDataMessage.getData())
-            params = {
-                "on_state": 1,
-                ATTR_BRIGHTNESS: (event.getBrightness() * 255) // 100,
-            }
-            channel.async_update_callback(**params)
-        if isinstance(busDataMessage.getData(), DimmerStatus):
-            channels = self.channels[
-                str(HausBusUtils.getDeviceId(busDataMessage.getSenderObjectId()))
-            ]
-            channel = channels[
-                (
-                    str(HausBusUtils.getClassId(busDataMessage.getSenderObjectId())),
-                    str(HausBusUtils.getInstanceId(busDataMessage.getSenderObjectId())),
-                )
-            ]
-            event = cast(DimmerStatus, busDataMessage.getData())
+        # dimmer event handling
+        if isinstance(data, DimmerEvOn):
+            channel = self.get_channel(object_id)
+            event = cast(DimmerEvOn, data)
+            self.set_light_brightness(channel, event.getBrightness())
+        if isinstance(data, DimmerStatus):
+            channel = self.get_channel(object_id)
+            event = cast(DimmerStatus, data)
             if event.getBrightness() > 0:
-                params = {
-                    "on_state": 1,
-                    ATTR_BRIGHTNESS: (event.getBrightness() * 255) // 100,
-                }
+                self.set_light_brightness(channel, event.getBrightness())
             else:
-                params = {
-                    "on_state": 0,
-                }
-            channel.async_update_callback(**params)
-        if isinstance(busDataMessage.getData(), DimmerEvOff):
-            channels = self.channels[
-                str(HausBusUtils.getDeviceId(busDataMessage.getSenderObjectId()))
-            ]
-            channel = channels[
-                (
-                    str(HausBusUtils.getClassId(busDataMessage.getSenderObjectId())),
-                    str(HausBusUtils.getInstanceId(busDataMessage.getSenderObjectId())),
-                )
-            ]
-            params = {
-                "on_state": 0,
-            }
-            channel.async_update_callback(**params)
-        if isinstance(busDataMessage.getData(), rgbDimmerEvOn):
-            channels = self.channels[
-                str(HausBusUtils.getDeviceId(busDataMessage.getSenderObjectId()))
-            ]
-            channel = channels[
-                (
-                    str(HausBusUtils.getClassId(busDataMessage.getSenderObjectId())),
-                    str(HausBusUtils.getInstanceId(busDataMessage.getSenderObjectId())),
-                )
-            ]
-            event = cast(rgbDimmerEvOn, busDataMessage.getData())
-            hue, saturation, value = colorsys.rgb_to_hsv(
-                event.getBrightnessRed() / 100.0,
-                event.getBrightnessGreen() / 100.0,
-                event.getBrightnessBlue() / 100.0,
+                self.light_turn_off(channel)
+        # rgb dimmmer event handling
+        if isinstance(data, rgbDimmerEvOn):
+            channel = self.get_channel(object_id)
+            event = cast(rgbDimmerEvOn, data)
+            self.set_light_color(
+                channel,
+                event.getBrightnessRed(),
+                event.getBrightnessGreen(),
+                event.getBrightnessBlue(),
             )
-            params = {
-                "on_state": 1,
-                ATTR_BRIGHTNESS: round(value * 255),
-                ATTR_HS_COLOR: (round(hue * 360), round(saturation * 100)),
-            }
-            channel.async_update_callback(**params)
-        if isinstance(busDataMessage.getData(), rgbDimmerStatus):
-            channels = self.channels[
-                str(HausBusUtils.getDeviceId(busDataMessage.getSenderObjectId()))
-            ]
-            channel = channels[
-                (
-                    str(HausBusUtils.getClassId(busDataMessage.getSenderObjectId())),
-                    str(HausBusUtils.getInstanceId(busDataMessage.getSenderObjectId())),
-                )
-            ]
-            event = cast(rgbDimmerStatus, busDataMessage.getData())
+        if isinstance(data, rgbDimmerStatus):
+            channel = self.get_channel(object_id)
+            event = cast(rgbDimmerStatus, data)
             if (
                 event.getBrightnessBlue() > 0
                 or event.getBrightnessGreen() > 0
                 or event.getBrightnessRed() > 0
             ):
-                hue, saturation, value = colorsys.rgb_to_hsv(
-                    event.getBrightnessRed() / 100.0,
-                    event.getBrightnessGreen() / 100.0,
-                    event.getBrightnessBlue() / 100.0,
+                self.set_light_color(
+                    channel,
+                    event.getBrightnessRed(),
+                    event.getBrightnessGreen(),
+                    event.getBrightnessBlue(),
                 )
-                params = {
-                    "on_state": 1,
-                    ATTR_BRIGHTNESS: round(value * 255),
-                    ATTR_HS_COLOR: (round(hue * 360), round(saturation * 100)),
-                }
             else:
-                params = {"on_state": 0}
-            channel.async_update_callback(**params)
-        if isinstance(busDataMessage.getData(), rgbDimmerEvOff):
-            channels = self.channels[
-                str(HausBusUtils.getDeviceId(busDataMessage.getSenderObjectId()))
-            ]
-            channel = channels[
-                (
-                    str(HausBusUtils.getClassId(busDataMessage.getSenderObjectId())),
-                    str(HausBusUtils.getInstanceId(busDataMessage.getSenderObjectId())),
-                )
-            ]
-            params = {
-                "on_state": 0,
-            }
-            channel.async_update_callback(**params)
+                self.light_turn_off(channel)
+        # led event handling
+        if isinstance(data, ledEvOn):
+            channel = self.get_channel(object_id)
+            event = cast(ledEvOn, data)
+            self.set_light_brightness(channel, event.getBrightness())
+        if isinstance(data, ledStatus):
+            channel = self.get_channel(object_id)
+            event = cast(ledStatus, data)
+            if event.getBrightness() > 0:
+                self.set_light_brightness(channel, event.getBrightness())
+            else:
+                self.light_turn_off(channel)
+        # light off events
+        if isinstance(data, (DimmerEvOff, ledEvOff, rgbDimmerEvOff)):
+            channel = self.get_channel(object_id)
+            self.light_turn_off(channel)
 
-    def register_platform_add_device_callback(
+    def register_platform_add_channel_callback(
         self,
-        add_device_callback: Callable[[HausbusChannel], Coroutine[Any, Any, None]],
+        add_channel_callback: Callable[[HausbusChannel], Coroutine[Any, Any, None]],
         platform: str,
     ):
-        """Register add device callbacks."""
-        self._listeners[platform] = add_device_callback
+        """Register add channel callbacks."""
+        self._new_channel_listeners[platform] = add_channel_callback

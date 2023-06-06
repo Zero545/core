@@ -38,29 +38,23 @@
   },
   "entity": {
     "light": {
-      "dim": {
+      "dimmer": {
         "name": "Dimmer"
       },
       "led": {
         "name": "LED"
       },
-      "rgb": {
+      "rgbdimmer": {
         "name": "RGB Dimmer"
-      },
-      "lbn": {
-        "name": "Backlight"
       }
     },
     "switch": {
-      "out": {
+      "schalter": {
         "name": "[%key:component::switch::entity_component::switch::name%]"
-      },
-      "redled": {
-        "name": "Red module LED"
       }
     },
     "binary_sensor": {
-      "btn": {
+      "taster": {
         "name": "[%key:component::binary_sensor::entity_component::_::name%]"
       }
     }

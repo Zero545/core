@@ -10,9 +10,9 @@ class IEventHandler(ABC):
     """Abstract base class for gateway event handling."""
 
     @abstractmethod
-    def register_platform_add_device_callback(
+    def register_platform_add_channel_callback(
         self,
-        add_device_callback: Callable[[HausbusChannel], Coroutine[Any, Any, None]],
+        add_channel_callback: Callable[[HausbusChannel], Coroutine[Any, Any, None]],
         platform: str,
     ):
         """Register add device callbacks."""

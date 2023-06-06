@@ -17,7 +17,7 @@ class HausbusChannel(Entity):
         self, channel_type: str, instance_id: int, device: HausbusDevice
     ) -> None:
         """Set up channel."""
-        self._type = channel_type
+        self._type = channel_type.lower()
         self._instance_id = instance_id
         self._device = device
 
@@ -34,17 +34,14 @@ class HausbusChannel(Entity):
     @property
     def translation_key(self) -> str | None:
         """Return the translation key to translate the entity's states."""
-        if self._instance_id != 210:
-            return self._type
-        return "redled"
+        return self._type
 
     @property
     def name(self) -> str | None:
         """Return the channel name."""
-        if self._instance_id != 210:
-            return f"{super().name} {self._instance_id}"
-        return super().name
+        return f"{super().name} {self._instance_id}"
 
     @callback
     def async_update_callback(self, **kwargs: Any) -> None:
         """State push update."""
+        raise NotImplementedError

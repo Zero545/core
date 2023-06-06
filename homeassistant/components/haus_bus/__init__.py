@@ -4,11 +4,10 @@ from __future__ import annotations
 from pyhausbus.de.hausbus.homeassistant.proxy.controller.params.EFirmwareId import (
     EFirmwareId,
 )
-import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_DEVICE_ID, Platform
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant
 
 from .binary_sensor import HausbusBinarySensor
 from .const import DOMAIN
@@ -39,21 +38,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     gateway.channels["123456"] = {}
 
     gateway.channels["123456"][("16", "17")] = HausbusBinarySensor(
-        "btn", 17, device, gateway
+        "Taster", 17, device, gateway
     )
     gateway.channels["123456"][("16", "18")] = HausbusBinarySensor(
-        "btn", 18, device, gateway
+        "Taster", 18, device, gateway
     )
     gateway.channels["123456"][("16", "19")] = HausbusBinarySensor(
-        "btn", 19, device, gateway
+        "Taster", 19, device, gateway
     )
     gateway.channels["123456"][("16", "20")] = HausbusBinarySensor(
-        "btn", 20, device, gateway
+        "Taster", 20, device, gateway
     )
     gateway.channels["123456"][("16", "21")] = HausbusBinarySensor(
-        "btn", 21, device, gateway
+        "Taster", 21, device, gateway
     )
-    gateway.channels["123456"][("16", "22")] = HausbusChannel("tst", 22, device)
+    gateway.channels["123456"][("16", "22")] = HausbusChannel("Schalter", 22, device)
 
     gateway.devices["123456"] = device
 
@@ -63,16 +62,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     gateway.home_server.searchDevices()
 
     # add device services: needs a services.yaml. Can be moved to separate services.py (see deconz integration)
-    @callback
-    def handle_reset(call):
-        """Handle the service call."""
-        device = call.data.get(ATTR_DEVICE_ID, None)
-
-        hass.states.set(f"{DOMAIN}.reset", device)
-
-    hass.services.async_register(
-        DOMAIN, "reset", handle_reset, vol.Schema({vol.Required(ATTR_DEVICE_ID): str})
-    )
+    #    @callback
+    #    def handle_reset(call):
+    #        """Handle the service call."""
+    #        device = call.data.get(ATTR_DEVICE_ID, None)
+    #
+    #        hass.states.set(f"{DOMAIN}.reset", device)
+    #
+    #    hass.services.async_register(
+    #        DOMAIN, "reset", handle_reset, vol.Schema({vol.Required(ATTR_DEVICE_ID): str})
+    #    )
 
     return True
 
