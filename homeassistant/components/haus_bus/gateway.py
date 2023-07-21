@@ -83,7 +83,7 @@ class HausbusGateway(IBusDataListener, IEventHandler):
         """Get channel from channel list."""
         channels = self.get_channel_list(object_id)
         channel_id = self.get_channel_id(object_id)
-        return channels[channel_id]
+        return channels.get(channel_id, None)
 
     def is_light_channel(self, class_id: int) -> bool:
         """Check if a class_id is a light."""
