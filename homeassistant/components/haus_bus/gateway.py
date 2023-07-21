@@ -2,7 +2,6 @@
 
 import asyncio
 from collections.abc import Callable, Coroutine
-import colorsys
 from typing import Any, cast
 
 from pyhausbus.ABusFeature import ABusFeature
@@ -21,36 +20,12 @@ from pyhausbus.de.hausbus.homeassistant.proxy.controller.data.ModuleId import Mo
 from pyhausbus.de.hausbus.homeassistant.proxy.controller.data.RemoteObjects import (
     RemoteObjects,
 )
-from pyhausbus.de.hausbus.homeassistant.proxy.dimmer.data.EvOff import (
-    EvOff as DimmerEvOff,
-)
-from pyhausbus.de.hausbus.homeassistant.proxy.dimmer.data.EvOn import EvOn as DimmerEvOn
-from pyhausbus.de.hausbus.homeassistant.proxy.dimmer.data.Status import (
-    Status as DimmerStatus,
-)
-from pyhausbus.de.hausbus.homeassistant.proxy.led.data.EvOff import EvOff as ledEvOff
-from pyhausbus.de.hausbus.homeassistant.proxy.led.data.EvOn import EvOn as ledEvOn
-from pyhausbus.de.hausbus.homeassistant.proxy.led.data.Status import Status as ledStatus
-from pyhausbus.de.hausbus.homeassistant.proxy.rGBDimmer.data.EvOff import (
-    EvOff as rgbDimmerEvOff,
-)
-from pyhausbus.de.hausbus.homeassistant.proxy.rGBDimmer.data.EvOn import (
-    EvOn as rgbDimmerEvOn,
-)
-from pyhausbus.de.hausbus.homeassistant.proxy.rGBDimmer.data.Status import (
-    Status as rgbDimmerStatus,
-)
 
-from homeassistant.components.light import (
-    ATTR_BRIGHTNESS,
-    ATTR_HS_COLOR,
-    DOMAIN as LIGHT_DOMAIN,
-)
+from homeassistant.components.light import DOMAIN as LIGHT_DOMAIN
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .channel import HausbusChannel
-from .const import ATTR_ON_STATE
 from .device import HausbusDevice
 from .event_handler import IEventHandler
 from .light import HausbusLight
@@ -104,7 +79,7 @@ class HausbusGateway(IBusDataListener, IEventHandler):
         """Get the channel identifier from an ObjectId."""
         return (str(object_id.getClassId()), str(object_id.getInstanceId()))
 
-    def get_channel(self, object_id: ObjectId) -> HausbusChannel:
+    def get_channel(self, object_id: ObjectId) -> HausbusChannel | None:
         """Get channel from channel list."""
         channels = self.get_channel_list(object_id)
         channel_id = self.get_channel_id(object_id)
@@ -135,32 +110,6 @@ class HausbusGateway(IBusDataListener, IEventHandler):
             if self.is_light_channel(object_id.getClassId()):
                 self.add_light_channel(instance, object_id)
 
-    def set_light_color(self, channel: HausbusChannel, red: int, green: int, blue: int):
-        """Set the brightness of a light channel."""
-        hue, saturation, value = colorsys.rgb_to_hsv(
-            red / 100.0,
-            green / 100.0,
-            blue / 100.0,
-        )
-        params = {
-            ATTR_ON_STATE: 1,
-            ATTR_BRIGHTNESS: round(value * 255),
-            ATTR_HS_COLOR: (round(hue * 360), round(saturation * 100)),
-        }
-        channel.async_update_callback(**params)
-
-    def set_light_brightness(self, channel: HausbusChannel, brightness: int):
-        """Set the brightness of a light channel."""
-        params = {ATTR_ON_STATE: 1, ATTR_BRIGHTNESS: (brightness * 255) // 100}
-        channel.async_update_callback(**params)
-
-    def light_turn_off(self, channel: HausbusChannel):
-        """Turn off a light channel."""
-        params = {
-            ATTR_ON_STATE: 0,
-        }
-        channel.async_update_callback(**params)
-
     def busDataReceived(self, busDataMessage: BusDataMessage):
         """Handle Haus-Bus messages."""
         object_id = ObjectId(busDataMessage.getSenderObjectId())
@@ -182,7 +131,6 @@ class HausbusGateway(IBusDataListener, IEventHandler):
             config = cast(Configuration, data)
             device = self.get_device(object_id)
             device.set_type(config.getFCKE())
-            controller.getRemoteObjects()
         if isinstance(data, RemoteObjects):
             instances: list[ABusFeature] = self.home_server.getDeviceInstances(
                 object_id.getValue(), data
@@ -190,60 +138,10 @@ class HausbusGateway(IBusDataListener, IEventHandler):
             for instance in instances:
                 # handle channels for the sending device
                 self.add_channel(instance)
-        # dimmer event handling
-        if isinstance(data, DimmerEvOn):
-            channel = self.get_channel(object_id)
-            event = cast(DimmerEvOn, data)
-            self.set_light_brightness(channel, event.getBrightness())
-        if isinstance(data, DimmerStatus):
-            channel = self.get_channel(object_id)
-            event = cast(DimmerStatus, data)
-            if event.getBrightness() > 0:
-                self.set_light_brightness(channel, event.getBrightness())
-            else:
-                self.light_turn_off(channel)
-        # rgb dimmmer event handling
-        if isinstance(data, rgbDimmerEvOn):
-            channel = self.get_channel(object_id)
-            event = cast(rgbDimmerEvOn, data)
-            self.set_light_color(
-                channel,
-                event.getBrightnessRed(),
-                event.getBrightnessGreen(),
-                event.getBrightnessBlue(),
-            )
-        if isinstance(data, rgbDimmerStatus):
-            channel = self.get_channel(object_id)
-            event = cast(rgbDimmerStatus, data)
-            if (
-                event.getBrightnessBlue() > 0
-                or event.getBrightnessGreen() > 0
-                or event.getBrightnessRed() > 0
-            ):
-                self.set_light_color(
-                    channel,
-                    event.getBrightnessRed(),
-                    event.getBrightnessGreen(),
-                    event.getBrightnessBlue(),
-                )
-            else:
-                self.light_turn_off(channel)
-        # led event handling
-        if isinstance(data, ledEvOn):
-            channel = self.get_channel(object_id)
-            event = cast(ledEvOn, data)
-            self.set_light_brightness(channel, event.getBrightness())
-        if isinstance(data, ledStatus):
-            channel = self.get_channel(object_id)
-            event = cast(ledStatus, data)
-            if event.getBrightness() > 0:
-                self.set_light_brightness(channel, event.getBrightness())
-            else:
-                self.light_turn_off(channel)
-        # light off events
-        if isinstance(data, (DimmerEvOff, ledEvOff, rgbDimmerEvOff)):
-            channel = self.get_channel(object_id)
-            self.light_turn_off(channel)
+        # light event handling
+        channel = self.get_channel(object_id)
+        if channel is not None:
+            HausbusLight.handle_light_event(data, channel)
 
     def register_platform_add_channel_callback(
         self,

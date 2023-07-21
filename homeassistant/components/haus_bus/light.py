@@ -6,6 +6,25 @@ from pyhausbus.ABusFeature import ABusFeature
 from pyhausbus.de.hausbus.homeassistant.proxy.Dimmer import Dimmer
 from pyhausbus.de.hausbus.homeassistant.proxy.Led import Led
 from pyhausbus.de.hausbus.homeassistant.proxy.RGBDimmer import RGBDimmer
+from pyhausbus.de.hausbus.homeassistant.proxy.dimmer.data.EvOff import (
+    EvOff as DimmerEvOff,
+)
+from pyhausbus.de.hausbus.homeassistant.proxy.dimmer.data.EvOn import EvOn as DimmerEvOn
+from pyhausbus.de.hausbus.homeassistant.proxy.dimmer.data.Status import (
+    Status as DimmerStatus,
+)
+from pyhausbus.de.hausbus.homeassistant.proxy.led.data.EvOff import EvOff as ledEvOff
+from pyhausbus.de.hausbus.homeassistant.proxy.led.data.EvOn import EvOn as ledEvOn
+from pyhausbus.de.hausbus.homeassistant.proxy.led.data.Status import Status as ledStatus
+from pyhausbus.de.hausbus.homeassistant.proxy.rGBDimmer.data.EvOff import (
+    EvOff as rgbDimmerEvOff,
+)
+from pyhausbus.de.hausbus.homeassistant.proxy.rGBDimmer.data.EvOn import (
+    EvOn as rgbDimmerEvOn,
+)
+from pyhausbus.de.hausbus.homeassistant.proxy.rGBDimmer.data.Status import (
+    Status as rgbDimmerStatus,
+)
 
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
@@ -73,6 +92,83 @@ class HausbusLight(HausbusChannel, LightEntity):
         if isinstance(self._channel, RGBDimmer):
             self._attr_supported_color_modes.add(ColorMode.HS)
             cast(RGBDimmer, self._channel.getStatus())
+
+    def set_light_color(self, red: int, green: int, blue: int):
+        """Set the brightness of a light channel."""
+        hue, saturation, value = colorsys.rgb_to_hsv(
+            red / 100.0,
+            green / 100.0,
+            blue / 100.0,
+        )
+        params = {
+            ATTR_ON_STATE: 1,
+            ATTR_BRIGHTNESS: round(value * 255),
+            ATTR_HS_COLOR: (round(hue * 360), round(saturation * 100)),
+        }
+        self.async_update_callback(**params)
+
+    def set_light_brightness(self, brightness: int):
+        """Set the brightness of a light channel."""
+        params = {ATTR_ON_STATE: 1, ATTR_BRIGHTNESS: (brightness * 255) // 100}
+        self.async_update_callback(**params)
+
+    def light_turn_off(self):
+        """Turn off a light channel."""
+        params = {
+            ATTR_ON_STATE: 0,
+        }
+        self.async_update_callback(**params)
+
+    @staticmethod
+    def handle_light_event(data: Any, channel: HausbusChannel):
+        """Handle light events from Haus-Bus."""
+        if not isinstance(channel, HausbusLight):
+            return
+        # dimmer event handling
+        if isinstance(data, DimmerEvOn):
+            event = cast(DimmerEvOn, data)
+            channel.set_light_brightness(event.getBrightness())
+        if isinstance(data, DimmerStatus):
+            event = cast(DimmerStatus, data)
+            if event.getBrightness() > 0:
+                channel.set_light_brightness(event.getBrightness())
+            else:
+                channel.light_turn_off()
+        # rgb dimmmer event handling
+        if isinstance(data, rgbDimmerEvOn):
+            event = cast(rgbDimmerEvOn, data)
+            channel.set_light_color(
+                event.getBrightnessRed(),
+                event.getBrightnessGreen(),
+                event.getBrightnessBlue(),
+            )
+        if isinstance(data, rgbDimmerStatus):
+            event = cast(rgbDimmerStatus, data)
+            if (
+                event.getBrightnessBlue() > 0
+                or event.getBrightnessGreen() > 0
+                or event.getBrightnessRed() > 0
+            ):
+                channel.set_light_color(
+                    event.getBrightnessRed(),
+                    event.getBrightnessGreen(),
+                    event.getBrightnessBlue(),
+                )
+            else:
+                channel.light_turn_off()
+        # led event handling
+        if isinstance(data, ledEvOn):
+            event = cast(ledEvOn, data)
+            channel.set_light_brightness(event.getBrightness())
+        if isinstance(data, ledStatus):
+            event = cast(ledStatus, data)
+            if event.getBrightness() > 0:
+                channel.set_light_brightness(event.getBrightness())
+            else:
+                channel.light_turn_off()
+        # light off events
+        if isinstance(data, (DimmerEvOff, ledEvOff, rgbDimmerEvOff)):
+            channel.light_turn_off()
 
     @property
     def color_mode(self) -> str | None:
