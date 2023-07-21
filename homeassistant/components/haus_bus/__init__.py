@@ -1,21 +1,20 @@
 """The hausbus integration."""
 from __future__ import annotations
 
-from pyhausbus.de.hausbus.homeassistant.proxy.controller.params.EFirmwareId import (
-    EFirmwareId,
-)
+import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from .binary_sensor import HausbusBinarySensor
 from .const import DOMAIN
-from .gateway import HausbusChannel, HausbusDevice, HausbusGateway
+from .gateway import HausbusGateway
 
 # TODO List the platforms that you want to support.
 # For your initial PR, limit it to 1 platform.
 PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.BINARY_SENSOR, Platform.SWITCH]
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -23,40 +22,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})
 
-    # TODO 1. Create API instance
-    # TODO 2. Validate the API connection (and authentication)
-    # TODO 3. Store an API object for your platforms to access
-
     gateway = HausbusGateway(hass, entry)
     hass.data[DOMAIN][entry.entry_id] = gateway
 
-    # double RGB dimmer dummy device
-    device = HausbusDevice(
-        gateway.bridge_id, "123456", "Test 1.2", "Test", EFirmwareId.SER_UNKNOWN
-    )
-
-    gateway.channels["123456"] = {}
-
-    gateway.channels["123456"][("16", "17")] = HausbusBinarySensor(
-        "Taster", 17, device, gateway
-    )
-    gateway.channels["123456"][("16", "18")] = HausbusBinarySensor(
-        "Taster", 18, device, gateway
-    )
-    gateway.channels["123456"][("16", "19")] = HausbusBinarySensor(
-        "Taster", 19, device, gateway
-    )
-    gateway.channels["123456"][("16", "20")] = HausbusBinarySensor(
-        "Taster", 20, device, gateway
-    )
-    gateway.channels["123456"][("16", "21")] = HausbusBinarySensor(
-        "Taster", 21, device, gateway
-    )
-    gateway.channels["123456"][("16", "22")] = HausbusChannel("Schalter", 22, device)
-
-    gateway.devices["123456"] = device
-
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    _LOGGER.debug("start searching devices")
 
     # search devices after adding all callbacks to the gateway object
     gateway.home_server.searchDevices()
