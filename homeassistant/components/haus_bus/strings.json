@@ -3,20 +3,7 @@
     "flow_title": "{host}",
     "step": {
       "user": {
-        "description": "Choose Haus-Bus connection type",
-        "data": {
-          "gateway_type": "[%key:common::config_flow::data::device%]"
-        }
-      },
-      "ip_gateway": {
-        "data": {
-          "ip_address": "[%key:common::config_flow::data::ip%]"
-        }
-      },
-      "rs_485_adapter": {
-        "data": {
-          "device_path": "[%key:common::config_flow::data::usb_path%]"
-        }
+        "description": "Create a Haus-Bus integration and perform auto-discovery of Haus-Bus devices."
       }
     },
     "error": {
